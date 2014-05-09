@@ -1,16 +1,35 @@
+#!/bin/bash
 
 declare -rx ipt="/sbin/iptables"
-declare tcp_frwd="$ipt -A FORWARD -s 10.199.115.0/24 -o eth0 -p tcp -m tcp"
-declare udp_frwd="$ipt -A FORWARD -s 10.199.115.0/24 -o eth0 -p udp -m udp"
-declare state_new="-m state --state NEW -m recent --set -m limit"
-declare drop_new="-m state --state NEW -m recent --update"
+
+# - IP addresses
+declare loopback="127.0.0.1/32"
 declare multicast="224.0.0.1/32"
 declare network="10.199.115.0/24"
-declare broadcast="10.199.115.255/32"
 declare gateway="10.199.115.1/32"
-declare loopback="127.0.0.1/32"
+declare broadcast="10.199.115.255/32"
 
-# - input chains
+# - Macros
+declare drop_new="-m state --state NEW -m recent --update"
+declare state_new="-m state --state NEW -m recent --set -m limit"
+declare tcp_frwd="$ipt -A FORWARD -s $network -o eth0 -p tcp -m tcp"
+declare udp_frwd="$ipt -A FORWARD -s $network -o eth0 -p udp -m udp"
+
+# - Clear out existing rules
+$ipt -F
+$ipt -F INPUT
+$ipt -F OUTPUT
+$ipt -F FORWARD
+$ipt -F -t mangle
+$ipt -F -t nat
+$ipt -X
+
+# - Default policies
+$ipt -P INPUT DROP
+$ipt -P OUTPUT ACCEPT
+$ipt -P FORWARD ACCEPT
+
+# ================ INPUT
 $ipt -A INPUT -i lo -j ACCEPT
 $ipt -A INPUT -d $multicast -j DROP
 $ipt -A INPUT -s $network -i eth1 -j ACCEPT
@@ -23,7 +42,7 @@ $ipt -A INPUT -s $network -d $gateway -i eth1 -p tcp -m tcp --dport 22 -j DROP
 $ipt -A INPUT -i eth0 -p tcp -m tcp --dport 22 -j LOG --log-prefix "BIFROZT - HonSSH: " --log-level 7
 $ipt -A INPUT -i eth0 -p tcp -m tcp --dport 60037 -j ACCEPT
 
-# - forward chains
+# ================ FORWARD
 $tcp_frwd --dport 20:21 $state_new --limit 6/sec --limit-burst 6 -j LOG --log-prefix "BIFROZT - FTP: " --log-level 7
 $tcp_frwd --dport 20:21 $drop_new --seconds 1 --hitcount 6 -j DROP
 $udp_frwd --dport 53 $state_new --limit 12/sec --limit-burst 12 -j LOG --log-prefix "BIFROZT - DNS udp: " --log-level 7
@@ -38,14 +57,16 @@ $tcp_frwd $state_new --limit 15/min --limit-burst 6 -j LOG --log-prefix "BIFROZT
 $tcp_frwd $drop_new --seconds 60 --hitcount 15 -j DROP
 $udp_frwd $state_new --limit 15/min --limit-burst 6 -j LOG --log-prefix "BIFROZT - Data control UDP: " --log-level 7
 $udp_frwd $drop_new --seconds 60 --hitcount 15 -j DROP
+
 $ipt -A FORWARD -i eth1 -p tcp -j ACCEPT
 $ipt -A FORWARD -i eth1 -p udp -j ACCEPT
 $ipt -A FORWARD -i eth1 -j ACCEPT
 $ipt -A FORWARD -i eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
 
-# - output chains
+# ================ OUTPUT
 $ipt -A OUTPUT -s $loopback -j ACCEPT
 $ipt -A OUTPUT -o lo -j ACCEPT
 $ipt -A OUTPUT -s $gateway -j ACCEPT
 $ipt -A OUTPUT -o eth1 -j ACCEPT
 $ipt -A OUTPUT -o eth0 -j ACCEPT
+
