@@ -4,10 +4,6 @@
 #   Developer:      Are Hansen
 #   Date:           2014, May 5
 #
-#   Usage:
-#   This script is executed by the debconf installer and takes care of configuration,
-#   package installation, updating and upgrading of Bifrozt during installation.
-#
 #   Copyright (c) 2014, Are Hansen - Honeypot Development
 # 
 #   All rights reserved.
